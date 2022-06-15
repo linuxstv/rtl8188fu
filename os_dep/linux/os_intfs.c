@@ -811,7 +811,11 @@ static int rtw_net_set_mac_address(struct net_device *pnetdev, void *addr)
 	}
 
 	_rtw_memcpy(adapter_mac_addr(padapter), sa->sa_data, ETH_ALEN); /* set mac addr to adapter */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0))
+	eth_hw_addr_set(pnetdev, sa->sa_data);
+#else
 	_rtw_memcpy(pnetdev->dev_addr, sa->sa_data, ETH_ALEN); /* set mac addr to net_device */
+#endif
 
 	rtw_ps_deny(padapter, PS_DENY_IOCTL);
 	LeaveAllPowerSaveModeDirect(padapter); /* leave PS mode for guaranteeing to access hw register successfully */
@@ -1197,7 +1201,11 @@ int rtw_os_ndev_register(_adapter *adapter, char *name)
 	/* alloc netdev name */
 	rtw_init_netdev_name(ndev, name);
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0))
+	eth_hw_addr_set(ndev, adapter_mac_addr(adapter));
+#else
 	_rtw_memcpy(ndev->dev_addr, adapter_mac_addr(adapter), ETH_ALEN);
+#endif
 
 	/* Tell the network stack we exist */
 	if (register_netdev(ndev) != 0) {
@@ -3143,7 +3151,9 @@ static int route_dump(u32 *gw_addr ,int* gw_index)
 	struct msghdr msg;
 	struct iovec iov;
 	struct sockaddr_nl nladdr;
+#ifdef set_fs
 	mm_segment_t oldfs;
+#endif
 	char *pg;
 	int size = 0;
 
@@ -3183,13 +3193,18 @@ static int route_dump(u32 *gw_addr ,int* gw_index)
 	msg.msg_controllen = 0;
 	msg.msg_flags = MSG_DONTWAIT;
 
-	oldfs = get_fs(); set_fs(KERNEL_DS);
+#ifdef set_fs
+	oldfs = get_fs();
+	set_fs(KERNEL_DS);
+#endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0))
 	err = sock_sendmsg(sock, &msg);
 #else
 	err = sock_sendmsg(sock, &msg, sizeof(req));
 #endif
+#ifdef set_fs
 	set_fs(oldfs);
+#endif
 
 	if (err < 0)
 		goto out_sock;
@@ -3215,9 +3230,14 @@ restart:
 		iov_iter_init(&msg.msg_iter, READ, &iov, 1, PAGE_SIZE);
 #endif
 
-		oldfs = get_fs(); set_fs(KERNEL_DS);
+#ifdef set_fs
+		oldfs = get_fs();
+		set_fs(KERNEL_DS);
+#endif
 		err = sock_recvmsg(sock, &msg, PAGE_SIZE, MSG_DONTWAIT);
+#ifdef set_fs
 		set_fs(oldfs);
+#endif
 
 		if (err < 0)
 			goto out_sock_pg;
@@ -3293,13 +3313,18 @@ done:
 		msg.msg_controllen = 0;
 		msg.msg_flags=MSG_DONTWAIT;
 
-		oldfs = get_fs(); set_fs(KERNEL_DS);
+#ifdef set_fs
+		oldfs = get_fs();
+		set_fs(KERNEL_DS);
+#endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0))
 		err = sock_sendmsg(sock, &msg);
 #else
 		err = sock_sendmsg(sock, &msg, sizeof(req));
 #endif
+#ifdef set_fs
 		set_fs(oldfs);
+#endif
 
 		if (err > 0)
 			goto restart;
